@@ -1,0 +1,12 @@
+# Ignore local terraform binaries and cache
+**/.terraform/
+.terraform/
+
+# Ignore state files (contain sensitive data)
+*.tfstate
+*.tfstate.*
+
+# Ignore plan files and logs
+*.tfplan
+crash.log
+crash.*.log
