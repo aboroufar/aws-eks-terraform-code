@@ -10,8 +10,8 @@ terraform {
 }
 
 provider "aws" {
-  region = var.aws_region
+  region                   = var.aws_region
   shared_config_files      = ["/Users/aboroufar/.aws/config"]
   shared_credentials_files = ["/Users/aboroufar/.aws/credentials"]
-  profile                  = "AdministratorAccess-253906287264"  
+  profile                  = "AdministratorAccess-253906287264"
 }

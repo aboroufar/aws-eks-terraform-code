@@ -22,7 +22,7 @@ module "eks" {
   # Managed Node Group using Spot instances for cost efficiency
   eks_managed_node_groups = {
     spot_workers = {
-      name          = "spot-eks-workers"
+      name           = "spot-eks-workers"
       instance_types = ["t3.medium", "t3a.medium"]
       capacity_type  = "SPOT"
 
