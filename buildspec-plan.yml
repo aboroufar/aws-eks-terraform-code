@@ -1,0 +1,23 @@
+version: 0.2
+
+env:
+  variables:
+    TF_VERSION: "1.9.5"
+
+phases:
+  install:
+    commands:
+      - curl -sL -o tf.zip "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip"
+      - unzip -o tf.zip -d /usr/local/bin/
+  pre_build:
+    commands:
+      - terraform init -input=false
+      - terraform fmt -check
+      - terraform validate
+  build:
+    commands:
+      - terraform plan -no-color -input=false -out=tfplan
+artifacts:
+  files:
+    - tfplan
+    - .terraform.lock.hcl

@@ -1,0 +1,39 @@
+version: 0.2
+
+env:
+  variables:
+    TF_VERSION: "1.9.5"
+    GITOPS_REPO: "github.com/aboroufar/gitops-workloads.git"
+    GIT_USER_EMAIL: "codebuild-ci@example.com"
+    GIT_USER_NAME: "AWS CodeBuild"
+  parameter-store:
+    GITHUB_PAT: "/codebuild/github_pat"
+
+phases:
+  install:
+    commands:
+      - curl -sL -o tf.zip "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip"
+      - unzip -o tf.zip -d /usr/local/bin/
+      - yum install -y git
+  pre_build:
+    commands:
+      - terraform init -input=false
+  build:
+    commands:
+      - echo "Destroying EKS cluster and related infrastructure..."
+      - terraform destroy -auto-approve -input=false
+  post_build:
+    commands:
+      - echo "Cleaning up ArgoCD cluster secret from GitOps repository..."
+      - git clone "https://${GITHUB_PAT}@${GITOPS_REPO}" gitops-workloads
+      - cd gitops-workloads
+      - rm -rf clusters/aws-eks-prod
+      - git config user.email "${GIT_USER_EMAIL}"
+      - git config user.name "${GIT_USER_NAME}"
+      - git add -A
+      - |
+        if ! git diff-index --quiet HEAD; then
+          git commit -m "chore(infra): remove destroyed EKS cluster secret [skip ci]"
+          git push origin main
+          echo "GitOps cluster secret removed."
+        fi
