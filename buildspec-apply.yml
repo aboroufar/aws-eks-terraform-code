@@ -27,19 +27,8 @@ phases:
       - CA_DATA=$(terraform output -raw cluster_certificate_authority_data)
       - BEARER_TOKEN=$(terraform output -raw argocd_manager_token)
       - SECRET_ID=$(terraform output -raw argocd_secret_id)
-
       - echo "Constructing JSON payload for Secrets Manager..."
-      - |
-        SECRET_JSON=$(jq -n \
-          --arg ep "$EKS_ENDPOINT" \
-          --arg ca "$CA_DATA" \
-          --arg tok "$BEARER_TOKEN" \
-          '{server: $ep, caData: $ca, bearerToken: $tok}')
-
-      - echo "Updating AWS Secrets Manager secret: ${SECRET_ID}"
-      - aws secretsmanager put-secret-value \
-          --secret-id "${SECRET_ID}" \
-          --secret-string "${SECRET_JSON}" \
-          --region "${AWS_DEFAULT_REGION}"
-
+      - SECRET_JSON=$(jq -n -c --arg ep "$EKS_ENDPOINT" --arg ca "$CA_DATA" --arg tok "$BEARER_TOKEN" '{"server":$ep,"caData":$ca,"bearerToken":$tok}')
+      - echo "Updating AWS Secrets Manager secret ${SECRET_ID}..."
+      - aws secretsmanager put-secret-value --secret-id "${SECRET_ID}" --secret-string "${SECRET_JSON}" --region "${AWS_DEFAULT_REGION}"
       - echo "Cluster registration payload successfully uploaded to Secrets Manager."
