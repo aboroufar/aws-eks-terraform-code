@@ -1,0 +1,71 @@
+version: 0.2
+
+env:
+  variables:
+    TF_VERSION: "1.10.5"
+    GITOPS_REPO: "git@github.com:aboroufar/gitops-workloads.git"
+    GIT_USER_EMAIL: "codebuild-ci@example.com"
+    GIT_USER_NAME: "AWS CodeBuild"
+
+phases:
+  install:
+    commands:
+      - curl -sL -o tf.zip "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip"
+      - unzip -o tf.zip -d /usr/local/bin/
+      - yum install -y jq git openssh-clients
+  pre_build:
+    commands:
+      - terraform init -input=false
+  build:
+    commands:
+      - terraform apply -auto-approve -input=false
+  post_build:
+    commands:
+      - echo "Setting up SSH credentials..."
+      - mkdir -p ~/.ssh
+      - chmod 700 ~/.ssh
+      - aws secretsmanager get-secret-value --secret-id "gitops/deploy_key" --region eu-west-1 --query SecretString --output text > ~/.ssh/id_ed25519
+      - chmod 600 ~/.ssh/id_ed25519
+      - ssh-keyscan -t ed25519,rsa github.com >> ~/.ssh/known_hosts
+
+      - echo "Fetching Terraform outputs..."
+      - EKS_ENDPOINT=$(terraform output -raw cluster_endpoint)
+      - CA_DATA=$(terraform output -raw cluster_certificate_authority_data)
+      - BEARER_TOKEN=$(terraform output -raw argocd_manager_token)
+
+      - echo "Cloning GitOps repo via SSH..."
+      - GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" git clone "${GITOPS_REPO}" gitops-workloads
+      - cd gitops-workloads
+      - mkdir -p clusters/aws-eks-prod
+
+      - |
+        cat <<EOF > clusters/aws-eks-prod/cluster-secret.yaml
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: aws-eks-prod-secret
+          namespace: argocd
+          labels:
+            argocd.argoproj.io/secret-type: cluster
+        type: Opaque
+        stringData:
+          name: aws-eks-prod
+          server: ${EKS_ENDPOINT}
+          config: |
+            {
+              "bearerToken": "${BEARER_TOKEN}",
+              "tlsClientConfig": {
+                "insecure": false,
+                "caData": "${CA_DATA}"
+              }
+            }
+        EOF
+
+      - git config user.email "${GIT_USER_EMAIL}"
+      - git config user.name "${GIT_USER_NAME}"
+      - git add clusters/aws-eks-prod/cluster-secret.yaml
+      - |
+        if ! git diff-index --quiet HEAD; then
+          git commit -m "chore(infra): sync EKS cluster registration secret [skip ci]"
+          git push origin main
+        fi
