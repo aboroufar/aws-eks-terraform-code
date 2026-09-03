@@ -3,18 +3,16 @@ version: 0.2
 env:
   variables:
     TF_VERSION: "1.9.5"
-    GITOPS_REPO: "github.com/aboroufar/gitops-workloads.git"
+    GITOPS_REPO: "git@github.com:aboroufar/gitops-workloads.git"
     GIT_USER_EMAIL: "codebuild-ci@example.com"
     GIT_USER_NAME: "AWS CodeBuild"
-  parameter-store:
-    GITHUB_PAT: "/codebuild/github_pat"
 
 phases:
   install:
     commands:
       - curl -sL -o tf.zip "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip"
       - unzip -o tf.zip -d /usr/local/bin/
-      - yum install -y jq git
+      - yum install -y jq git openssh-clients
   pre_build:
     commands:
       - terraform init -input=false
@@ -23,13 +21,20 @@ phases:
       - terraform apply -auto-approve -input=false
   post_build:
     commands:
+      - echo "Setting up SSH credentials..."
+      - mkdir -p ~/.ssh
+      - chmod 700 ~/.ssh
+      - aws secretsmanager get-secret-value --secret-id "gitops/deploy_key" --region eu-west-1 --query SecretString --output text > ~/.ssh/id_ed25519
+      - chmod 600 ~/.ssh/id_ed25519
+      - ssh-keyscan -t ed25519,rsa github.com >> ~/.ssh/known_hosts
+
       - echo "Fetching Terraform outputs..."
       - EKS_ENDPOINT=$(terraform output -raw cluster_endpoint)
       - CA_DATA=$(terraform output -raw cluster_certificate_authority_data)
       - BEARER_TOKEN=$(terraform output -raw argocd_manager_token)
 
-      - echo "Updating GitOps cluster registration secret..."
-      - git clone "https://${GITHUB_PAT}@${GITOPS_REPO}" gitops-workloads
+      - echo "Cloning GitOps repo via SSH..."
+      - git clone "${GITOPS_REPO}" gitops-workloads
       - cd gitops-workloads
       - mkdir -p clusters/aws-eks-prod
 
