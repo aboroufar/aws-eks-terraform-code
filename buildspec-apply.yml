@@ -34,7 +34,7 @@ phases:
       - BEARER_TOKEN=$(terraform output -raw argocd_manager_token)
 
       - echo "Cloning GitOps repo via SSH..."
-      - git clone "${GITOPS_REPO}" gitops-workloads
+      - GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" git clone "${GITOPS_REPO}" gitops-workloads
       - cd gitops-workloads
       - mkdir -p clusters/aws-eks-prod
 
